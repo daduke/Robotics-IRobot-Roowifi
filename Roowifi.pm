@@ -96,9 +96,9 @@ use Math::Trig ':radial';
 use IO::Socket::INET;
 use Data::Dumper;
 
-#$| = 1;
-my $DEBUG=1;
-my $EPSILON=0.015;
+my $DEBUG=0;
+#my $EPSILON=0.015;
+my $EPSILON=0.0;
 my $WHEEL_WIDTH=258;
 my $ROBOT_WIDTH=330;
 
@@ -161,6 +161,7 @@ sub init {
 	$self->initSocket()  || die "Unable to initialize socket";
 	$self->writeBytes(128);
 
+    #TODO
     #wakey wakey
 
 	my $socket = $self->{socket};
@@ -251,8 +252,6 @@ sub startSafeMode {
 	my $self=shift;
 	
 	$self->writeBytes(131);
-	
-	sleep .03;
 }
 
 =item $robot->startFullMode()
@@ -268,8 +267,6 @@ sub startFullMode {
 	my $self=shift;
 	
 	$self->writeBytes(132);
-	
-	sleep .03;
 }
 
 =item $robot->startDemo($demoId)
@@ -343,8 +340,7 @@ Stops robot.
 sub stop($) {
 	my $self=shift;
 	
-#TODO
-#	$self->drive(0,0);
+	$self->drive(0,0);
 }
 
 =item $robot->forward($velocity)
@@ -619,6 +615,57 @@ sub updateDigitalOutputs($) {
 	}
 	
 	$self->writeBytes(147,$byte);
+}
+
+=item $robot->spot()
+
+Starts a spot cleaning cycle
+
+=cut
+
+sub spot() {
+	my $self=shift;
+
+	$self->writeBytes(134);
+}
+
+=item $robot->clean()
+
+Starts a cleaning cycle
+
+=cut
+
+sub clean() {
+	my $self=shift;
+
+	$self->writeBytes(135);
+}
+
+=item $robot->dock()
+
+Send Roomba to dock
+
+=cut
+
+sub dock() {
+	my $self=shift;
+
+	$self->writeBytes(143);
+}
+
+=item $robot->setLCD($$)
+
+Writes up to 4 characters to LCD
+
+=cut
+
+sub setLCD($$) {
+	my $self=shift;
+
+    my $string = substr shift."   ", 0, 4;
+    my @string = map ord, split //, $string;
+
+	$self->writeBytes(164, @string);
 }
 
 =item $robot->setPWMLoads($lsd0, $lsd1, $lsd2)
@@ -2454,6 +2501,7 @@ sub close($) {
 	my $self=shift;
 	
 	$self->stop();
+
 	$self->writeBytes(173); #enter Stop mode
 	
 	$self->stopTelemetry if ($self->{telem});
@@ -2540,8 +2588,8 @@ distance travelled in mm since last sensor refresh (signed short)
 =item angle --
 angle turned in degrees since last sensor refresh (signed short)
 	
-	positive angles are counter-clockwise
-	negative are clockwise
+	positive angles are clockwise
+	negative are counter-clockwise
 	NOTE: This sensor is extremely inaccurate (see actualAngle)
 
 =item chargingState --
@@ -2840,6 +2888,8 @@ sub _indirectSensors($$$) {
 	my $direction=$sensorState->{direction};
 	
 	my ($distance,$actualAngle)=&{$self->{deadReckoning}}($self,$listener,$sensorIds);
+    $distance *= -1;    #otherwise forward is negative
+    $actualAngle *= -1; #positive == clockwise
 	my ($dxf,$dyf)=_getRelativeMovement($actualAngle,$distance);
 	my ($dx,$dy)=_getAbsoluteMovement($direction,$dxf,$dyf);
 	
@@ -2957,6 +3007,9 @@ sub initSocket($) {
 	
     my $socket;
     if ($socket = IO::Socket::INET->new(PeerAddr => $self->{address}, PeerPort => '9001', Proto => 'tcp')) {
+        $socket->autoflush(1);
+        $socket->blocking(0);
+        $| = 1;
 		$self->{socket}=$socket;
     } else {
 		return 0;
@@ -2975,13 +3028,14 @@ sub writeBytes(@) {
 	if ($self->{scriptMode}) {
 		push @{$self->{scriptBytes}}, @_;
     } else {
-        print "Writing bytes: " . join(", ",@_) . "\n" if ($DEBUG);
+        print "Writing bytes: " . join(" ",@_) . "\n" if ($DEBUG);
 
         my $data=pack('C*',@_).'\n';
 
         $self->_writeTelem('W',$data);
 
         $self->{socket}->send($data) unless ($self->{replay});
+        sleep 0.05;
     }
 
 
