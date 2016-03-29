@@ -10,8 +10,8 @@ Robotics::IRobot::Roowifi - provides interface to iRobot Roomba and Create robot
 
 	use Robotics::IRobot::Roowifi;
 	
-	my $robot=Robotics::IRobot::Roowifi->new('IP');
-	#specify IP address of your Roowifi
+	my $robot=Robotics::IRobot::Roowifi->new('IP', 'user, 'password');
+	#specify IP address of your Roowifi and the credentials of the web interface
 	
 	#Initializes socket and sends OI Init command
 	$robot->init();
@@ -95,6 +95,7 @@ use Math::Trig ':pi';
 use Math::Trig ':radial';
 use IO::Socket::INET;
 use Data::Dumper;
+use LWP::Simple;
 
 my $DEBUG=0;
 #my $EPSILON=0.015;
@@ -114,9 +115,9 @@ my ($sensorSpecs,$sensorGroups,@sensorFields,
 
 =over 4
 
-=item Robotics::IRobot::Roowifi->new($address,$indirectSensorsOn)
+=item Robotics::IRobot::Roowifi->new($address,$user,$password,$indirectSensorsOn)
 
-Creates a new IRobot object using the given IP address
+Creates a new IRobot object using the given IP address and credentials
 and enables indirect sensors if $indirectSensorsOn is true (this is the default).
 
 =cut
@@ -124,7 +125,8 @@ and enables indirect sensors if $indirectSensorsOn is true (this is the default)
 sub new {
 	shift;
 	my $self={
-		address=>(shift), indirectSensorsOn=>(shift || 1),
+		address=>(shift), user=>(shift), password=>(shift),
+        indirectSensorsOn=>(shift || 1),
 		deadReckoning=>\&_correctiveDeadReckoning,
 		readBuffer=> '', sensorState=>{lastSensorRefresh=>time()}, ledState=>{},
 		pwmState=>[0,0,0], outputState=>[0,0,0],
@@ -157,12 +159,13 @@ actuator commands.>
 
 sub init {
 	my $self=shift;
+
+    #wake newer Roombas
+    get("http://" . $self->{user} . ":" . $self->{password} . "@" . $self->{address} . "/rwr.cgi?exec=1");
+    sleep 2;
 	
 	$self->initSocket()  || die "Unable to initialize socket";
 	$self->writeBytes(128);
-
-    #TODO
-    #wakey wakey
 
 	my $socket = $self->{socket};
     my $startupMsg = '';
@@ -186,7 +189,7 @@ sub initForReplay($$) {
         my $self=shift;
         my $file=shift;
         
-	my $replay;
+        my $replay;
 	
         open $replay, $file;
         $self->{replay}=$replay;

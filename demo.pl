@@ -4,7 +4,7 @@ use strict;
 
 use Robotics::IRobot::Roowifi;
 
-my $robot=Robotics::IRobot::Roowifi->new('192.168.0.11');   #specify RooWifi IP here
+my $robot=Robotics::IRobot::Roowifi->new('192.168.0.11', 'admin', 'roombaadmin');   #specify RooWifi IP here
 
 $robot->init(); 
 
